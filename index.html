@@ -1,0 +1,820 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Study Timer</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#c2410c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Study Timer">
+<style>
+  :root {
+    --bg: #f6f5f1; --card: #ffffff; --ink: #1d1d1b; --muted: #6b6a64; --line: #e4e2da;
+    --accent: #c2410c; --accent-soft: #fde7da; --ok: #15803d; --warn: #b45309; --bad: #b91c1c;
+    --break: #0f766e; --break-soft: #d5f0ec;
+    --lvl-easy: #15803d; --lvl-easy-soft: #dcf3e3; --lvl-med: #a16207; --lvl-med-soft: #fbf0c7;
+    --lvl-hard: #c2410c; --lvl-hard-soft: #fde4d3; --lvl-tough: #b91c1c; --lvl-tough-soft: #fbdcdc;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161614; --card: #201f1c; --ink: #edebe4; --muted: #9a988f; --line: #33322e;
+      --accent: #fb923c; --accent-soft: #3a2518; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171;
+      --break: #2dd4bf; --break-soft: #143330;
+      --lvl-easy: #4ade80; --lvl-easy-soft: #16301f; --lvl-med: #facc15; --lvl-med-soft: #332b10;
+      --lvl-hard: #fb923c; --lvl-hard-soft: #3a2416; --lvl-tough: #f87171; --lvl-tough-soft: #3b1a1a;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1240px; margin: 0 auto; padding: 32px 24px 64px; }
+  @media (max-width: 600px) { main { padding: 24px 16px 48px; } }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr); gap: 24px; }
+  @media (max-width: 860px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 28px; }
+  @media (max-width: 600px) { .card { padding: 20px; } }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 14px; }
+  .full { grid-column: 1 / -1; }
+
+  /* Timer */
+  .mode { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 99px;
+    background: var(--accent-soft); color: var(--accent); }
+  .mode.break { background: var(--break-soft); color: var(--break); }
+  .clock { font-size: 72px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+    text-align: center; margin: 8px 0 4px; }
+  .bar { height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; margin-bottom: 16px; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .3s linear; }
+  .bar.break > div { background: var(--break); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .center { justify-content: center; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--ink);
+    padding: 8px 14px; border-radius: 8px; cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; min-width: 110px; }
+  button.icon { padding: 2px 8px; color: var(--muted); border-color: transparent; background: transparent; }
+  button.icon:hover { color: var(--bad); }
+  button.icon.edit:hover { color: var(--accent); }
+  input, select { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 10px; min-width: 0; }
+  input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  label.small { font-size: 13px; color: var(--muted); }
+  .muted { color: var(--muted); font-size: 13px; }
+
+  /* Exams */
+  .exam-fields { display: grid; grid-template-columns: 1.3fr .8fr 1fr auto; gap: 8px; }
+  .exam-fields input[type=text], .exam-fields .btns { grid-column: 1 / -1; }
+  .exam-fields .btns { display: flex; gap: 8px; justify-content: flex-end; }
+  form.add { margin-bottom: 14px; }
+  .edit-form.exam-fields { grid-template-columns: 1.3fr .8fr 1fr; }
+  @media (max-width: 420px) { .exam-fields, .edit-form.exam-fields { grid-template-columns: 1fr 1fr; } }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li.exam { display: grid; grid-template-columns: 64px 1fr auto; gap: 12px; align-items: center;
+    padding: 10px 0; border-top: 1px solid var(--line); }
+  li.exam:first-child { border-top: 0; }
+  .days { text-align: center; font-weight: 700; font-size: 22px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .days small { display: block; font-size: 11px; font-weight: 500; color: var(--muted); margin-top: 2px; }
+  .soon { color: var(--bad); } .mid { color: var(--warn); } .far { color: var(--ok); } .past { color: var(--muted); }
+  .exam .name { font-weight: 600; }
+  .exam .meta { font-size: 13px; color: var(--muted); }
+  .empty { color: var(--muted); font-size: 14px; padding: 8px 0; }
+  .actions { display: flex; gap: 2px; }
+  li.exam.editing { grid-template-columns: 1fr; }
+  .name-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .lvl { flex: none; display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600;
+    padding: 1px 8px 1px 6px; border-radius: 99px; color: var(--c); background: var(--c-soft); }
+  .lvl i { font-style: normal; display: inline-grid; place-items: center; width: 14px; height: 14px; line-height: 1; }
+  .lvl .warn-sign { color: var(--c); font-size: 14px; font-family: "Segoe UI Symbol", "DejaVu Sans", sans-serif; }
+  .lvl .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
+  .lvl-easy  { --c: var(--lvl-easy);  --c-soft: var(--lvl-easy-soft); }
+  .lvl-medium{ --c: var(--lvl-med);   --c-soft: var(--lvl-med-soft); }
+  .lvl-hard  { --c: var(--lvl-hard);  --c-soft: var(--lvl-hard-soft); }
+  .lvl-tough { --c: var(--lvl-tough); --c-soft: var(--lvl-tough-soft); }
+  .list-foot { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+    border-top: 1px solid var(--line); margin-top: 4px; padding-top: 10px; font-size: 13px; color: var(--muted); }
+  .list-foot b { color: var(--ink); }
+
+  /* Stats */
+  .stat-row { display: grid; grid-template-columns: 140px 1fr 70px; gap: 10px; align-items: center; margin: 6px 0; font-size: 14px; }
+  .stat-row .track { height: 10px; background: var(--line); border-radius: 99px; overflow: hidden; }
+  .stat-row .fill { height: 100%; background: var(--accent); border-radius: 99px; }
+  .stat-row .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+  .totals { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 12px; }
+  .totals b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
+  .totals span { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Exam progress */
+  .log-h { margin-top: 28px !important; }
+  .prog-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px; }
+  .prog { border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; min-width: 0; }
+  .prog-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+  .prog .pct { font-size: 22px; font-variant-numeric: tabular-nums; }
+  .prog .track { height: 10px; background: var(--line); border-radius: 99px; overflow: hidden; margin-bottom: 12px; }
+  .prog .fill { height: 100%; background: var(--lvl-easy); border-radius: 99px; transition: width .3s; }
+  .part { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0 6px; }
+  .part input { width: 64px; padding: 4px 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { min-width: 32px; padding: 4px 0; font-size: 13px; font-variant-numeric: tabular-nums; border-radius: 6px; }
+  .chip.on { background: var(--lvl-easy-soft); border-color: var(--lvl-easy); color: var(--lvl-easy); font-weight: 600; }
+
+  /* Header, account, sign-in */
+  .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
+  .top .sub { margin-bottom: 0; }
+  .account { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .auth { max-width: 420px; margin: 10vh auto 0; }
+  .auth form { display: grid; gap: 12px; margin: 8px 0 4px; }
+  .auth label { display: grid; gap: 4px; }
+  .auth .primary { width: 100%; }
+  button.link { border: 0; background: none; color: var(--accent); padding: 4px 0; }
+  button.link:hover { text-decoration: underline; }
+  .msg-err { color: var(--bad); }
+</style>
+</head>
+<body>
+<section class="card auth" id="authView" hidden>
+  <h1>Study Timer</h1>
+  <p class="sub" id="authSub">Sign in to see your exams and progress on any device.</p>
+  <form id="authForm" hidden>
+    <label class="small">Email <input type="email" id="authEmail" autocomplete="email" required></label>
+    <label class="small">Password <input type="password" id="authPass" autocomplete="current-password" minlength="6" required></label>
+    <button class="primary" type="submit" id="authSubmit">Sign in</button>
+  </form>
+  <p class="muted" id="authMsg" role="status">Loading…</p>
+  <div class="row" id="authLinks" style="justify-content:space-between" hidden>
+    <button type="button" class="link" id="authToggle">Create an account</button>
+    <button type="button" class="link" id="authForgot">Forgot password?</button>
+  </div>
+</section>
+
+<main id="app">
+  <header class="top">
+    <div>
+      <h1>Study Timer</h1>
+      <p class="sub">See how many days are left until each exam, and run focus sessions for each subject.</p>
+    </div>
+    <div class="account">
+      <span class="muted" id="whereSaved"></span>
+      <button id="exportBtn" title="Save all your data to a file">Export</button>
+      <button id="importBtn" title="Load data from an exported file">Import</button>
+      <button id="signOutBtn" hidden>Sign out</button>
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+    </div>
+  </header>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Focus timer</h2>
+      <div class="row" style="justify-content:space-between">
+        <span id="mode" class="mode">Focus</span>
+        <span class="muted" id="cycle">Session 1</span>
+      </div>
+      <div class="clock" id="clock">25:00</div>
+      <div class="bar" id="bar"><div></div></div>
+      <div class="row center" style="margin-bottom:16px">
+        <button class="primary" id="startBtn">Start</button>
+        <button id="resetBtn">Reset</button>
+        <button id="skipBtn">Skip</button>
+      </div>
+      <div class="row">
+        <label class="small" for="subject">Studying</label>
+        <select id="subject" style="flex:1"></select>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label class="small">Focus <input id="focusMin" type="number" min="1" max="120" style="width:64px"> min</label>
+        <label class="small">Break <input id="breakMin" type="number" min="1" max="60" style="width:64px"> min</label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Exams</h2>
+      <form class="add exam-fields" id="addForm">
+        <input type="text" id="exName" placeholder="Subject, e.g. PC" required maxlength="40">
+        <input type="date" id="exDate" required aria-label="Exam date">
+        <input type="number" id="exCredits" min="0" max="30" step="1" placeholder="Credits" aria-label="Credits">
+        <select id="exLevel" aria-label="Threat level"></select>
+        <button type="submit">Add</button>
+      </form>
+      <ul id="exams"></ul>
+      <div class="list-foot" id="examFoot" hidden></div>
+    </section>
+
+    <section class="card full">
+      <div class="row" style="justify-content:space-between; margin-bottom:14px">
+        <h2 style="margin:0">Study log</h2>
+        <span class="muted" id="logScope"></span>
+      </div>
+      <div class="totals">
+        <div><b id="tToday">0m</b><span>Today</span></div>
+        <div><b id="tWeek">0m</b><span>Last 7 days</span></div>
+        <div><b id="tAll">0m</b><span>All time</span></div>
+        <div><b id="tSessions">0</b><span>Sessions</span></div>
+        <div><b id="tProgress">0%</b><span>Understood</span></div>
+      </div>
+      <h2 class="log-h">Time per day</h2>
+      <div id="perDay"></div>
+      <div id="bySubject">
+        <h2 class="log-h">Time per subject</h2>
+        <div id="stats"></div>
+      </div>
+      <h2 class="log-h">Exam progress</h2>
+      <p class="muted" style="margin:-6px 0 14px">Tick a course (C) or lab (L) once you understand it. Set how many each exam has with the boxes.</p>
+      <div class="prog-grid" id="progress"></div>
+      <div class="row" style="margin-top:12px; justify-content:flex-end">
+        <button id="clearLog" class="icon" style="font-size:13px">Clear log</button>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script>
+  // Firebase project settings: Firebase console → Project settings → Your apps → Web app → Config.
+  // Leave as null to keep the app local-only. These values are not secret; the database
+  // rules (firestore.rules) are what keep each person's data private.
+  window.FIREBASE_CONFIG = {
+    apiKey: "AIzaSyDP8Dx9__VTI3xLg_IM1rsDIm3R6swhKwI",
+    authDomain: "study-timer-e1664.firebaseapp.com",
+    projectId: "study-timer-e1664",
+    storageBucket: "study-timer-e1664.firebasestorage.app",
+    messagingSenderId: "701989274683",
+    appId: "1:701989274683:web:ec2d39fc0689c05f07081e",
+  };
+</script>
+<script>
+(() => {
+  // ---------- storage ----------
+  // Two modes, same app:
+  //  - local: opened as a file (or no Firebase config). Data lives in this browser.
+  //  - cloud: opened from the website. Data lives in the signed-in user's Firestore doc;
+  //    the module script at the bottom signs in, loads it and swaps `persist`.
+  const CLOUD = !!window.FIREBASE_CONFIG && /^https?:$/.test(location.protocol);
+  const KEY = 'study-timer-v1';
+  // a function, so every reset gets fresh arrays instead of sharing (and mutating) one set
+  const defaults = () => ({ exams: [], log: [], focusMin: 25, breakMin: 5, subject: '' });
+  const clean = s => {
+    const x = Object.assign(defaults(), s && typeof s === 'object' ? s : {});
+    if (!Array.isArray(x.exams)) x.exams = [];
+    if (!Array.isArray(x.log)) x.log = [];
+    return x;
+  };
+  // plain JSON copy: drops undefined values, which Firestore rejects
+  const snapshot = () => JSON.parse(JSON.stringify(state));
+  let state = clean(null);
+  let persist = () => {};
+  if (!CLOUD) {
+    try { state = clean(JSON.parse(localStorage.getItem(KEY) || '{}')); } catch {}
+    persist = s => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch {} };
+  }
+  const save = () => persist(snapshot());
+
+  const $ = id => document.getElementById(id);
+  const esc = s => s.replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  const fmtMin = m => m >= 60 ? `${Math.floor(m / 60)}h ${Math.round(m % 60)}m` : `${Math.round(m)}m`;
+  const startOfDay = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+
+  // ---------- exams ----------
+  const today = () => startOfDay(new Date());
+  const daysUntil = iso => Math.round((startOfDay(iso + 'T00:00') - today()) / 864e5);
+
+  // Threat levels, mildest first. Exams saved before levels existed count as medium.
+  const LEVELS = {
+    easy:   { label: 'Easy',   icon: '<span class="dot"></span>' },
+    medium: { label: 'Medium', icon: '<span class="dot"></span>' },
+    hard:   { label: 'Hard',   icon: '❗' },
+    // ︎ = text-style ⚠, so it takes the badge's red instead of the yellow emoji
+    tough:  { label: 'Tough',  icon: '<b class="warn-sign">⚠︎</b>' },
+  };
+  const levelOf = e => LEVELS[e.level] ? e.level : 'medium';
+  const levelOptions = sel => Object.entries(LEVELS)
+    .map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${v.label}</option>`).join('');
+  const badge = k => `<span class="lvl lvl-${k}" title="Threat level: ${LEVELS[k].label}"><i>${LEVELS[k].icon}</i>${LEVELS[k].label}</span>`;
+  // empty input -> no credits; otherwise a whole number 0–30
+  const parseCredits = v => v === '' || v == null ? null : Math.min(30, Math.max(0, Math.round(+v) || 0));
+  const fmtCredits = c => `${c} credit${c === 1 ? '' : 's'}`;
+  $('exLevel').innerHTML = levelOptions('medium');
+
+  function renderExams() {
+    const ul = $('exams');
+    const list = [...state.exams].sort((a, b) => a.date.localeCompare(b.date));
+    renderExamFoot();
+    if (!list.length) { ul.innerHTML = '<li class="empty">No exams yet. Add one above.</li>'; return; }
+    ul.innerHTML = list.map(e => {
+      if (e.id === editingId) return `<li class="exam editing">
+        <form class="edit-form exam-fields" data-id="${e.id}">
+          <input type="text" name="name" value="${esc(e.name)}" required maxlength="40" aria-label="Subject">
+          <input type="date" name="date" value="${e.date}" required aria-label="Exam date">
+          <input type="number" name="credits" value="${e.credits ?? ''}" min="0" max="30" step="1" placeholder="Credits" aria-label="Credits">
+          <select name="level" aria-label="Threat level">${levelOptions(levelOf(e))}</select>
+          <div class="btns">
+            <button type="button" data-cancel>Cancel</button>
+            <button type="submit" class="primary" style="min-width:0">Save</button>
+          </div>
+        </form></li>`;
+      const d = daysUntil(e.date);
+      const cls = d < 0 ? 'past' : d <= 3 ? 'soon' : d <= 10 ? 'mid' : 'far';
+      const big = d < 0 ? '✓' : d === 0 ? '!' : d;
+      const lbl = d < 0 ? 'done' : d === 0 ? 'today' : d === 1 ? 'day' : 'days';
+      const when = new Date(e.date + 'T00:00').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+      const studied = state.log.filter(l => l.subject === e.name).reduce((s, l) => s + l.min, 0);
+      return `<li class="exam">
+        <div class="days ${cls}">${big}<small>${lbl}</small></div>
+        <div style="min-width:0"><div class="name-line"><span class="name ellipsis">${esc(e.name)}</span>${badge(levelOf(e))}</div>
+          <div class="meta">${when}${e.credits != null ? ' · ' + fmtCredits(e.credits) : ''} · studied ${fmtMin(studied)}</div></div>
+        <div class="actions">
+          <button class="icon edit" data-edit="${e.id}" title="Edit" aria-label="Edit ${esc(e.name)}">✎</button>
+          <button class="icon" data-del="${e.id}" title="Remove" aria-label="Remove ${esc(e.name)}">✕</button>
+        </div>
+      </li>`;
+    }).join('');
+    const f = ul.querySelector('.edit-form input[name=name]');
+    if (f) { f.focus(); f.select(); }
+  }
+
+  // Footer: credits still ahead of you, and how many upcoming exams are hard/tough.
+  function renderExamFoot() {
+    const foot = $('examFoot');
+    const upcoming = state.exams.filter(e => daysUntil(e.date) >= 0);
+    if (!state.exams.length) { foot.hidden = true; return; }
+    const credits = upcoming.reduce((s, e) => s + (e.credits || 0), 0);
+    const scary = upcoming.filter(e => ['hard', 'tough'].includes(levelOf(e))).length;
+    foot.hidden = false;
+    foot.innerHTML = `<span><b>${upcoming.length}</b> upcoming · <b>${credits}</b> credits at stake</span>`
+      + (scary ? `<span><b>${scary}</b> hard or tough</span>` : '');
+  }
+
+  let editingId = null;
+
+  // Edit an exam in place. Logged sessions are keyed by subject name,
+  // so a rename carries them (and the current timer subject) over to the new name.
+  function saveExam(id, { name, date, credits, level }) {
+    const e = state.exams.find(x => x.id === id);
+    if (!e || !name || !date) return;
+    const old = e.name;
+    Object.assign(e, { name, date, credits, level });
+    if (old !== name) {
+      // only move log entries if no other exam still uses the old name
+      if (!state.exams.some(x => x.name === old)) {
+        state.log.forEach(l => { if (l.subject === old) l.subject = name; });
+        if (state.subject === old) state.subject = name;
+      }
+    }
+    editingId = null;
+    save(); renderAll();
+  }
+
+  $('addForm').addEventListener('submit', ev => {
+    ev.preventDefault();
+    const name = $('exName').value.trim();
+    const date = $('exDate').value;
+    if (!name || !date) return;
+    state.exams.push({ id: Date.now().toString(36), name, date,
+      credits: parseCredits($('exCredits').value), level: $('exLevel').value });
+    if (!state.subject) state.subject = name;
+    editingId = null;
+    save(); $('exName').value = ''; $('exDate').value = ''; $('exCredits').value = ''; $('exLevel').value = 'medium';
+    renderAll();
+  });
+  $('exams').addEventListener('click', ev => {
+    const ds = ev.target.dataset || {};
+    if (ds.edit) { editingId = ds.edit; renderExams(); return; }
+    if ('cancel' in ds) { editingId = null; renderExams(); return; }
+    if (!ds.del) return;
+    state.exams = state.exams.filter(e => e.id !== ds.del);
+    if (editingId === ds.del) editingId = null;
+    save(); renderAll();
+  });
+  $('exams').addEventListener('submit', ev => {
+    ev.preventDefault();
+    const f = ev.target;
+    const el = f.elements;
+    saveExam(f.dataset.id, { name: el.name.value.trim(), date: el.date.value,
+      credits: parseCredits(el.credits.value), level: el.level.value });
+  });
+  $('exams').addEventListener('keydown', ev => {
+    if (ev.key === 'Escape' && editingId) { editingId = null; renderExams(); }
+  });
+
+  // ---------- subject picker ----------
+  function renderSubjects() {
+    const sel = $('subject');
+    const names = [...new Set([...state.exams.map(e => e.name), ...state.log.map(l => l.subject)])].filter(Boolean);
+    sel.innerHTML = '<option value="">General</option>' +
+      names.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    if (!names.includes(state.subject)) state.subject = '';
+    sel.value = state.subject;
+  }
+  // the subject picked here also decides what the Study log shows
+  $('subject').addEventListener('change', e => { state.subject = e.target.value; save(); renderStats(); });
+
+  // ---------- timer ----------
+  let mode = 'focus';       // 'focus' | 'break'
+  let running = false;
+  let endAt = 0;            // timestamp when current phase ends (while running)
+  let remaining = state.focusMin * 60 * 1000; // ms left (while paused)
+  let sessionNo = 1;
+  let tick = null;
+
+  const phaseLen = () => (mode === 'focus' ? state.focusMin : state.breakMin) * 60 * 1000;
+  const left = () => running ? Math.max(0, endAt - Date.now()) : remaining;
+
+  function renderTimer() {
+    const ms = left();
+    const s = Math.ceil(ms / 1000);
+    const txt = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+    $('clock').textContent = txt;
+    $('bar').firstElementChild.style.width = `${(1 - ms / phaseLen()) * 100}%`;
+    $('bar').classList.toggle('break', mode === 'break');
+    $('mode').textContent = mode === 'focus' ? 'Focus' : 'Break';
+    $('mode').classList.toggle('break', mode === 'break');
+    $('cycle').textContent = `Session ${sessionNo}`;
+    $('startBtn').textContent = running ? 'Pause' : (ms < phaseLen() ? 'Resume' : 'Start');
+    document.title = running ? `${txt} · ${mode === 'focus' ? 'Focus' : 'Break'}` : 'Study Timer';
+  }
+
+  function beep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      [0, 0.25, 0.5].forEach(t => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.frequency.value = mode === 'focus' ? 880 : 660;
+        g.gain.setValueAtTime(0.0001, ctx.currentTime + t);
+        g.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + t + 0.2);
+        o.connect(g).connect(ctx.destination);
+        o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.22);
+      });
+    } catch {}
+  }
+
+  function logFocus(minutes) {
+    if (minutes < 1) return;
+    state.log.push({ subject: state.subject, min: Math.round(minutes * 10) / 10, at: Date.now() });
+    save();
+  }
+
+  function finishPhase(completed) {
+    if (mode === 'focus') {
+      logFocus((phaseLen() - (completed ? 0 : left())) / 60000);
+      mode = 'break';
+    } else {
+      mode = 'focus';
+      sessionNo++;
+    }
+    if (completed) beep();
+    running = false; clearInterval(tick);
+    remaining = phaseLen();
+    if (completed && 'Notification' in window && Notification.permission === 'granted') {
+      try { new Notification(mode === 'break' ? 'Focus done. Take a break.' : 'Break over. Back to work.'); } catch {}
+    }
+    renderAll();
+  }
+
+  function start() {
+    if ('Notification' in window && Notification.permission === 'default') {
+      try { Notification.requestPermission(); } catch {}
+    }
+    running = true; endAt = Date.now() + remaining;
+    clearInterval(tick);
+    tick = setInterval(() => { if (left() <= 0) finishPhase(true); else renderTimer(); }, 250);
+    renderTimer();
+  }
+  function pause() { remaining = left(); running = false; clearInterval(tick); renderTimer(); }
+
+  $('startBtn').addEventListener('click', () => running ? pause() : start());
+  $('resetBtn').addEventListener('click', () => { running = false; clearInterval(tick); remaining = phaseLen(); renderTimer(); });
+  $('skipBtn').addEventListener('click', () => finishPhase(false));
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Space' && !['INPUT', 'SELECT', 'BUTTON'].includes(e.target.tagName)) {
+      e.preventDefault(); running ? pause() : start();
+    }
+  });
+
+  ['focusMin', 'breakMin'].forEach(k => {
+    const el = $(k);
+    el.value = state[k];
+    el.addEventListener('change', () => {
+      const v = Math.min(+el.max, Math.max(1, Math.round(+el.value) || state[k]));
+      el.value = v; state[k] = v; save();
+      if (!running && ((k === 'focusMin') === (mode === 'focus'))) remaining = phaseLen();
+      renderTimer();
+    });
+  });
+
+  // ---------- stats ----------
+  // Study log scope: '' (General) shows everything, otherwise only the picked subject.
+  const logScope = () => state.subject || '';
+
+  function renderStats() {
+    const scope = logScope();
+    const logs = scope ? state.log.filter(l => l.subject === scope) : state.log;
+    const t0 = today().getTime(), w0 = t0 - 6 * 864e5;
+    const sum = arr => arr.reduce((s, l) => s + l.min, 0);
+    $('tToday').textContent = fmtMin(sum(logs.filter(l => l.at >= t0)));
+    $('tWeek').textContent = fmtMin(sum(logs.filter(l => l.at >= w0)));
+    $('tAll').textContent = fmtMin(sum(logs));
+    $('tSessions').textContent = logs.length;
+    $('logScope').textContent = scope ? `Showing: ${scope}` : 'Showing: all exams';
+
+    // last 7 days, newest first
+    const days = Array.from({ length: 7 }, (_, i) => {
+      const d = today(); d.setDate(d.getDate() - i);
+      const end = new Date(d); end.setDate(end.getDate() + 1);
+      const label = i === 0 ? 'Today' : i === 1 ? 'Yesterday'
+        : d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+      return [label, sum(logs.filter(l => l.at >= d.getTime() && l.at < end.getTime()))];
+    });
+    const dayMax = Math.max(...days.map(d => d[1]), 1);
+    $('perDay').innerHTML = logs.length ? days.map(([k, v]) => `
+      <div class="stat-row"><div class="ellipsis">${k}</div>
+        <div class="track"><div class="fill" style="width:${(v / dayMax) * 100}%"></div></div>
+        <div class="num">${fmtMin(v)}</div></div>`).join('')
+      : `<div class="empty">No study time logged${scope ? ' for ' + esc(scope) : ''} yet. Finish a focus session and it shows up here.</div>`;
+
+    // per-subject split only makes sense when looking at everything
+    $('bySubject').hidden = !!scope;
+
+    const by = {};
+    state.log.forEach(l => { const k = l.subject || 'General'; by[k] = (by[k] || 0) + l.min; });
+    const rows = Object.entries(by).sort((a, b) => b[1] - a[1]);
+    const max = rows[0]?.[1] || 1;
+    $('stats').innerHTML = rows.length ? rows.map(([k, v]) => `
+      <div class="stat-row"><div class="ellipsis">${esc(k)}</div>
+        <div class="track"><div class="fill" style="width:${(v / max) * 100}%"></div></div>
+        <div class="num">${fmtMin(v)}</div></div>`).join('')
+      : '<div class="empty">Finish a focus session and it shows up here. Sessions under a minute are not logged.</div>';
+    renderProgress();
+  }
+
+  // ---------- exam progress ----------
+  // Each exam keeps its own course/lab counts and a map of understood items,
+  // e.g. done: { C1: <timestamp>, L3: <timestamp> }. Lowering a count hides items
+  // past it without deleting them, so raising it again brings them back.
+  const DEFAULT_PARTS = { courses: 14, labs: 14 };
+  const MAX_PARTS = 30;
+  const PREFIX = { courses: 'C', labs: 'L' };
+  function progressOf(e) {
+    const done = e.done || {};
+    const p = { total: 0, got: 0 };
+    for (const part of ['courses', 'labs']) {
+      const n = e[part] ?? DEFAULT_PARTS[part];
+      const got = Object.keys(done).filter(k => k[0] === PREFIX[part] && +k.slice(1) <= n).length;
+      p[part] = { n, got };
+      p.total += n; p.got += got;
+    }
+    p.pct = p.total ? Math.round(p.got / p.total * 100) : 0;
+    return p;
+  }
+
+  function renderProgress() {
+    const box = $('progress');
+    const scope = logScope();
+    const list = [...state.exams].sort((a, b) => a.date.localeCompare(b.date))
+      .filter(e => !scope || e.name === scope);
+    // headline %: the picked exam, or everything understood across exams that haven't happened yet
+    const up = (scope ? list : list.filter(e => daysUntil(e.date) >= 0)).map(progressOf);
+    const tot = up.reduce((s, p) => s + p.total, 0);
+    $('tProgress').textContent = `${tot ? Math.round(up.reduce((s, p) => s + p.got, 0) / tot * 100) : 0}%`;
+
+    if (!list.length) {
+      box.innerHTML = `<div class="empty">${scope
+        ? `There's no exam called ${esc(scope)} any more. Pick another one under Studying.`
+        : 'Add an exam to start tracking what you understand.'}</div>`;
+      return;
+    }
+    box.innerHTML = list.map(e => {
+      const p = progressOf(e), done = e.done || {};
+      const part = (key, label) => {
+        const { n, got } = p[key], pre = PREFIX[key];
+        const chips = Array.from({ length: n }, (_, i) => {
+          const k = pre + (i + 1), on = !!done[k];
+          return `<button class="chip${on ? ' on' : ''}" data-pid="${e.id}" data-item="${k}" aria-pressed="${on}"
+            title="${label.slice(0, -1)} ${i + 1}${on ? ': understood' : ''}">${k}</button>`;
+        }).join('');
+        return `<div class="part"><span class="muted">${label} ${got}/${n}</span>
+            <input type="number" min="0" max="${MAX_PARTS}" value="${n}" data-pid="${e.id}" data-count="${key}" aria-label="Number of ${label.toLowerCase()} for ${esc(e.name)}"></div>
+          <div class="chips">${chips || '<span class="muted">None</span>'}</div>`;
+      };
+      return `<div class="prog">
+        <div class="prog-head"><div class="name-line"><span class="name ellipsis">${esc(e.name)}</span>${badge(levelOf(e))}</div>
+          <b class="pct">${p.pct}%</b></div>
+        <div class="track"><div class="fill" style="width:${p.pct}%"></div></div>
+        ${part('courses', 'Courses')}
+        ${part('labs', 'Labs')}
+      </div>`;
+    }).join('');
+  }
+
+  $('progress').addEventListener('click', ev => {
+    const b = ev.target.closest('.chip');
+    if (!b) return;
+    const e = state.exams.find(x => x.id === b.dataset.pid);
+    if (!e) return;
+    e.done = e.done || {};
+    if (e.done[b.dataset.item]) delete e.done[b.dataset.item];
+    else e.done[b.dataset.item] = Date.now();
+    save(); renderProgress();
+    $('progress').querySelector(`.chip[data-pid="${e.id}"][data-item="${b.dataset.item}"]`)?.focus();
+  });
+  $('progress').addEventListener('change', ev => {
+    const inp = ev.target;
+    if (!inp.dataset.count) return;
+    const e = state.exams.find(x => x.id === inp.dataset.pid);
+    if (!e) return;
+    e[inp.dataset.count] = Math.min(MAX_PARTS, Math.max(0, Math.round(+inp.value) || 0));
+    save(); renderProgress();
+  });
+
+  $('clearLog').addEventListener('click', () => {
+    if (confirm('Clear all logged study time? Your exam progress (ticked courses and labs) is kept.')) { state.log = []; save(); renderAll(); }
+  });
+
+  // don't redraw the exam list mid-edit, or the half-typed values would be lost
+  function renderAll() { if (!editingId) renderExams(); renderSubjects(); renderTimer(); renderStats(); }
+  renderAll();
+  // refresh day counts after midnight
+  setInterval(() => { if (!editingId) renderExams(); }, 60 * 1000);
+
+  // ---------- export / import ----------
+  // Moves everything between copies of the app (offline file <-> website, or another device).
+  $('exportBtn').addEventListener('click', () => {
+    const file = { app: 'study-timer', version: 1, exportedAt: new Date().toISOString(), data: snapshot() };
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2)], { type: 'application/json' }));
+    a.download = `study-timer-${new Date().toLocaleDateString('sv')}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+  $('importBtn').addEventListener('click', () => $('importFile').click());
+  $('importFile').addEventListener('change', async ev => {
+    const f = ev.target.files[0];
+    ev.target.value = '';
+    if (!f) return;
+    let data;
+    try {
+      const parsed = JSON.parse(await f.text());
+      data = parsed && parsed.app === 'study-timer' ? parsed.data : parsed;
+      if (!data || !Array.isArray(data.exams) || !Array.isArray(data.log)) throw 0;
+    } catch { alert("That file isn't a Study Timer export."); return; }
+    const msg = `Replace everything here with the imported data?\n\n` +
+      `File: ${data.exams.length} exam(s), ${data.log.length} study session(s).\n` +
+      `Here now: ${state.exams.length} exam(s), ${state.log.length} study session(s).`;
+    if (!confirm(msg)) return;
+    StudyApp.load(data);
+    save();
+  });
+
+  // ---------- hooks for the cloud (sign-in) script ----------
+  const setWhere = txt => { $('whereSaved').textContent = txt; };
+  if (!CLOUD) setWhere('Saved in this browser');
+  window.StudyApp = {
+    cloud: CLOUD,
+    // replace all data (from the cloud or an import) and redraw
+    load(s) {
+      const oldLen = phaseLen();
+      state = clean(s);
+      $('focusMin').value = state.focusMin; $('breakMin').value = state.breakMin;
+      if (!running && remaining === oldLen) remaining = phaseLen();
+      renderAll();
+    },
+    snapshot,
+    setPersist(fn) { persist = fn; },
+    setWhere,
+  };
+})();
+</script>
+
+<script type="module">
+  // Cloud mode: email/password accounts (Firebase Auth) and one private Firestore
+  // document per person at users/<uid>. Firestore's local cache keeps the app usable
+  // offline; changes made offline sync when the connection comes back.
+  const App = window.StudyApp;
+  const $ = id => document.getElementById(id);
+  const V = '10.12.2', base = `https://www.gstatic.com/firebasejs/${V}/`;
+
+  if (App.cloud) {
+    $('app').hidden = true;
+    $('authView').hidden = false;
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+
+    let fb;
+    try {
+      const [appMod, A, F] = await Promise.all(
+        ['firebase-app.js', 'firebase-auth.js', 'firebase-firestore.js'].map(f => import(base + f)));
+      fb = { A, F, app: appMod.initializeApp(window.FIREBASE_CONFIG) };
+    } catch {
+      $('authMsg').textContent = "Couldn't load. Connect to the internet and refresh the page.";
+    }
+    if (fb) startCloud(fb);
+  }
+
+  function startCloud({ A, F, app }) {
+    const auth = A.getAuth(app);
+    const db = F.initializeFirestore(app, {
+      localCache: F.persistentLocalCache({ tabManager: F.persistentMultipleTabManager() }),
+    });
+
+    // ----- sign-in screen -----
+    let signUp = false;
+    const ERRORS = {
+      'auth/invalid-credential': 'Wrong email or password.',
+      'auth/invalid-email': "That email address doesn't look right.",
+      'auth/email-already-in-use': 'There is already an account with this email. Sign in instead.',
+      'auth/weak-password': 'Use at least 6 characters for the password.',
+      'auth/too-many-requests': 'Too many attempts. Wait a few minutes and try again.',
+      'auth/network-request-failed': 'No internet connection.',
+      'auth/missing-email': 'Type your email first.',
+    };
+    const say = (txt, err) => { $('authMsg').textContent = txt; $('authMsg').classList.toggle('msg-err', !!err); };
+    const setMode = up => {
+      signUp = up;
+      $('authSubmit').textContent = up ? 'Create account' : 'Sign in';
+      $('authToggle').textContent = up ? 'I already have an account' : 'Create an account';
+      $('authSub').textContent = up ? 'Make an account to keep your exams and progress on any device.'
+                                    : 'Sign in to see your exams and progress on any device.';
+      $('authPass').autocomplete = up ? 'new-password' : 'current-password';
+      say('');
+    };
+    $('authToggle').addEventListener('click', () => setMode(!signUp));
+    $('authForm').addEventListener('submit', async ev => {
+      ev.preventDefault();
+      const email = $('authEmail').value.trim(), pass = $('authPass').value;
+      $('authSubmit').disabled = true; say(signUp ? 'Creating your account…' : 'Signing in…');
+      try {
+        await (signUp ? A.createUserWithEmailAndPassword : A.signInWithEmailAndPassword)(auth, email, pass);
+      } catch (e) { say(ERRORS[e.code] || 'Something went wrong. Try again.', true); }
+      $('authSubmit').disabled = false;
+    });
+    $('authForgot').addEventListener('click', async () => {
+      const email = $('authEmail').value.trim();
+      if (!email) { say(ERRORS['auth/missing-email'], true); $('authEmail').focus(); return; }
+      try { await A.sendPasswordResetEmail(auth, email); say(`If ${email} has an account, a reset link is on its way.`); }
+      catch (e) { say(ERRORS[e.code] || 'Something went wrong. Try again.', true); }
+    });
+
+    // ----- syncing -----
+    let unsub = null, pending = null, flush = () => {};
+    const showWhere = email => App.setWhere(navigator.onLine ? email : `${email} · offline, will sync`);
+    let email = '';
+    addEventListener('online', () => email && showWhere(email));
+    addEventListener('offline', () => email && showWhere(email));
+    addEventListener('pagehide', () => flush());   // closing the tab mid-debounce
+
+    $('signOutBtn').addEventListener('click', async () => {
+      flush();
+      await A.signOut(auth);
+    });
+
+    A.onAuthStateChanged(auth, user => {
+      if (unsub) { unsub(); unsub = null; }
+      if (!user) {
+        email = '';
+        App.setPersist(() => {});
+        App.load(null);
+        $('app').hidden = true; $('authView').hidden = false;
+        $('authForm').hidden = false; $('authLinks').hidden = false; $('signOutBtn').hidden = true;
+        $('authPass').value = '';
+        setMode(signUp);
+        return;
+      }
+      email = user.email || 'Signed in';
+      say('Loading your data…');
+      const ref = F.doc(db, 'users', user.uid);
+
+      // save at most every 0.6 s while someone is clicking around
+      App.setPersist(s => {
+        pending = s;
+        clearTimeout(flush.t);
+        flush.t = setTimeout(flush, 600);
+      });
+      flush = () => {
+        clearTimeout(flush.t);
+        if (!pending) return;
+        const s = pending; pending = null;
+        F.setDoc(ref, { ...s, updatedAt: Date.now() }).catch(() => App.setWhere("Couldn't save. Check your connection."));
+      };
+
+      let shown = false;
+      unsub = F.onSnapshot(ref, { includeMetadataChanges: false }, snap => {
+        if (snap.metadata.hasPendingWrites) return;      // our own change echoing back
+        // A missing doc read from the offline cache may just mean "not downloaded yet":
+        // wait for the server rather than showing (and then saving) an empty app.
+        if (!snap.exists() && snap.metadata.fromCache) {
+          if (!navigator.onLine) say('Connect to the internet once to download your data.');
+          return;
+        }
+        App.load(snap.exists() ? snap.data() : null);
+        if (!shown) {
+          shown = true;
+          $('authView').hidden = true; $('app').hidden = false; $('signOutBtn').hidden = false;
+          showWhere(email);
+        }
+      }, () => App.setWhere("Couldn't sync. Try signing out and in again."));
+    });
+  }
+</script>
+</body>
+</html>
